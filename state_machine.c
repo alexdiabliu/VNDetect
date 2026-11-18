@@ -2,9 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-const int DISTANCE_THRESHOLD = 100;
-const int BLOOD_THRESHOLD = 50;
-const int TIME_THRESHOLD = 3000;
+#define TIME_THRESHOLD 3000
 
 typedef enum {
     STATE_NORMAL,
@@ -22,8 +20,10 @@ typedef struct {
     int disturbance_count;
 } SensorData;
 
+static uint32_t suspect_start = 0;
+
 System_state update_state_machine(System_state current_state, SensorData sensors, uint32_t counterMs) {
-    static uint32_t suspect_start = 0;
+    
     // Hardware check first (Fault)
     if (!sensors.allSensorsOperational) {
         return STATE_FAULT;
