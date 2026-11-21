@@ -1,56 +1,89 @@
-
+/**
+ * MSP detection entry — wires ports → features → think → status transport.
+ * Host build: `make -C detection` (uses stub drivers).
+ */
 #include <stdint.h>
+#include <stdio.h>
+
+#include "config/board_config.h"
+#include "platform/board_bind.h"
+#include "ports/rgb_sensor_port.h"
+#include "ports/sensor_x_port.h"
+#include "ports/status_transport_port.h"
+#include "app/features.h"
+#include "app/think/think.h"
+#include "protocol/types.h"
+
+#if defined(MSP_HOST_BUILD)
 #include <unistd.h>
-#include "drivers/rgb_sensor.h"
-#include "drivers/ble_link.h"
-#include "app/sensor_data.h"
-#include "app/state_machine.h"
+#endif
 
-#define LOOP_PERIOD_MS 50U     // TEMPORARY VALUE
-#define BLE_HEARTBEAT_MS 1000U   // 1 Hz heartbeat to XIAO ESP32
+#ifndef MSP_HOST_MAX_TICKS
+#define MSP_HOST_MAX_TICKS 40U /* ~2s at 50ms — enough for a stub smoke run */
+#endif
 
-void *mainThread(void *arg0) {
+int main(void)
+{
     uint32_t now_ms = 0;
     uint32_t last_hb_ms = 0;
-    System_state current_state = STATE_NORMAL;
-    System_state prev_state = STATE_NORMAL;
+    ThinkState state = THINK_STATE_NORMAL;
+    unsigned ticks = 0;
 
-    rgb_sensor_init();
-    ble_link_init();
-    state_machine_reset();
+    if (board_bind_and_init() != 0) {
+#if defined(MSP_HOST_BUILD)
+        fprintf(stderr, "board_bind_and_init failed\n");
+#endif
+        return 1;
+    }
 
-    while (1) {
-        // 1. Poll hardware drivers
-        rgb_sensor_poll();
-        ble_link_poll(now_ms); // Saves sensor_x.last_update_ms
+    think_reset();
 
-        // 2. Process raw data into disturbance_count & health
-        RgbReading rgb = rgb_sensor_get_latest();
-        SensorXReading sx = ble_link_get_sensor_x();
-        SensorData sensors = process_sensor_data(rgb, sx, now_ms);
+    for (;;) {
+        RgbSample rgb;
+        SensorXSample sx;
+        SensorFeatures features;
+        ThinkInputs inputs;
+        ThinkResult result;
 
-        // 3. Run state machine
-        current_state = update_state_machine(current_state, sensors, now_ms);
+        rgb_sensor_poll(now_ms);
+        sensor_x_poll(now_ms);
 
-        // 4. Act on immediate state transitions
-        if (current_state != prev_state) {
-            if (current_state == STATE_ALARM) {
-                ble_link_send_alarm();
-            } else if (current_state == STATE_FAULT) {
-                ble_link_send_fault();
+        if (rgb_sensor_read(&rgb) != 0 || sensor_x_read(&sx) != 0) {
+            state = THINK_STATE_FAULT;
+            (void)status_transport_send(STATUS_FAULT);
+        } else {
+            features = features_from_samples(&rgb, &sx, now_ms);
+            inputs.features = features;
+            inputs.now_ms = now_ms;
+            result = think_step(state, &inputs);
+            state = result.state;
+
+            if (result.publish || result.state_changed) {
+                if (result.status == STATUS_ALARM || result.status == STATUS_FAULT) {
+                    (void)status_transport_send(result.status);
+                }
             }
-            prev_state = current_state;
+
+            if ((now_ms - last_hb_ms) >= CFG_HEARTBEAT_PERIOD_MS) {
+                if (state == THINK_STATE_NORMAL || state == THINK_STATE_SUSPECT) {
+                    (void)status_transport_send(STATUS_HEARTBEAT);
+                }
+                last_hb_ms = now_ms;
+            }
         }
 
-        // 5. Periodic heartbeat
-        if ((now_ms - last_hb_ms) >= BLE_HEARTBEAT_MS) {
-            if (current_state == STATE_NORMAL || current_state == STATE_SUSPECT) {
-                ble_link_send_heartbeat();
-            }
-            last_hb_ms = now_ms;
-        }
+        now_ms += CFG_LOOP_PERIOD_MS;
+        ticks++;
 
-        usleep(LOOP_PERIOD_MS * 1000U);
-        now_ms += LOOP_PERIOD_MS;
+#if defined(MSP_HOST_BUILD)
+        if (ticks >= MSP_HOST_MAX_TICKS) {
+            printf("host smoke run complete: state=%d ticks=%u\n", (int)state, ticks);
+            return 0;
+        }
+        /* Optional real-time pacing; skip for fast CI. */
+#else
+        (void)ticks;
+        /* On MSP: replace with Timer_A / WDT sleep for CFG_LOOP_PERIOD_MS. */
+#endif
     }
 }

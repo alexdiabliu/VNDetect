@@ -1,1 +1,5 @@
+MSP modular architecture (user-facing plan) lives in the Capstone Project store:
+  docs/msp-modular-architecture.md
 
+Firmware skeleton: detection/ (ports + stub drivers + think).
+See repo README for how to swap a hardware backend.

@@ -1,0 +1,6 @@
+# Host stub build artifacts
+detection/detection_host
+detection/**/*.o
+*.o
+*.elf
+*.map
