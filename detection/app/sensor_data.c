@@ -9,6 +9,7 @@ SensorData process_sensor_data(RgbReading rgb, SensorXReading sensor_x, uint32_t
     SensorData out = {0, 0, true, 0};
 
     // 1. Health & timeout check (catches unplugged wires or frozen streams);
+    bool rgb_alive = rgb.valid;
     bool sx_alive  = sensor_x.valid && ((now_ms - sensor_x.last_update_ms) <= SENSOR_TIMEOUT_MS);
 
     if (!rgb_alive || !sx_alive) {
