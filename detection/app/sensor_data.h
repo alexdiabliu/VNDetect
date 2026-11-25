@@ -4,8 +4,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "rgb_sensor.h"
-#include "ble_link.h"
+#include "../drivers/rgb_sensor.h"
+#include "../drivers/ble_link.h"
 
 typedef struct {
     int distance_reading;
