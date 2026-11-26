@@ -11,15 +11,15 @@ void rgb_sensor_init(void)
     latest = (RgbReading){0};
     line_length = 0;
 
-    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R13;  // Port P clock
-    SYSCTL_RCGCUART_R |= SYSCTL_RCGCUART_R6;   // UART6 clock
+    // enable GPIO Port P and UART6
+    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R13;
+    SYSCTL_RCGCUART_R |= SYSCTL_RCGCUART_R6;
 
     while ((SYSCTL_PRGPIO_R & SYSCTL_PRGPIO_R13) == 0U) {}
     while ((SYSCTL_PRUART_R & SYSCTL_PRUART_R6) == 0U) {}
 
+    // connect UART6 to Port P pins 0 and 1
     UART6_CTL_R = 0U;
-
-    // PP0 (J5 pin 3): digital input, alternate function 1 = U6RX
     GPIO_PORTP_AMSEL_R &= ~0x01U;
     GPIO_PORTP_PCTL_R = (GPIO_PORTP_PCTL_R & ~0x0FU) | 0x01U;
     GPIO_PORTP_AFSEL_R |= 0x01U;
@@ -50,7 +50,8 @@ void rgb_sensor_poll(void)
                 latest = (RgbReading){(uint8_t)r, (uint8_t)g, (uint8_t)b, true};
                 return;  // One complete RGB reading per poll
             }
-        } else if (line_length < sizeof(line) - 1U) {
+        } 
+        else if (line_length < sizeof(line) - 1U) {
             line[line_length++] = ch;
         }
     }
