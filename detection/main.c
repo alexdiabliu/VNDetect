@@ -1,6 +1,6 @@
 
 #include <stdint.h>
-#include <unistd.h>
+// #include <unistd.h>
 #include "drivers/rgb_sensor.h"
 #include "drivers/ble_link.h"
 #include "app/sensor_data.h"
@@ -53,4 +53,9 @@ void *mainThread(void *arg0) {
         usleep(LOOP_PERIOD_MS * 1000U);
         now_ms += LOOP_PERIOD_MS;
     }
+}
+
+int main(void) {
+    mainThread(NULL);
+    return 0;
 }
